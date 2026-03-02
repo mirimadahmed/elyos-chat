@@ -58,10 +58,8 @@ async def main():
                 print(chunk, end="", flush=True)
             print()
         except KeyboardInterrupt:
-            # Roll back any partial assistant/tool messages from this turn
+            # Roll back any partial assistant/tool messages added during this turn
             del messages[msg_count_before:]
-            # Also remove the user message since the turn was cancelled
-            messages.pop()
             print("\nCancelled.")
             continue
 
