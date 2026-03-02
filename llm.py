@@ -5,11 +5,11 @@ def create_client(api_key: str) -> AsyncOpenAI:
     return AsyncOpenAI(api_key=api_key)
 
 
-async def stream_chat(client: AsyncOpenAI, user_message: str):
-    """Send a single message to the LLM and yield streamed content chunks."""
+async def stream_chat(client: AsyncOpenAI, messages: list[dict]):
+    """Send messages to the LLM and yield streamed content chunks."""
     response = await client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "user", "content": user_message}],
+        messages=messages,
         stream=True,
     )
     async for chunk in response:

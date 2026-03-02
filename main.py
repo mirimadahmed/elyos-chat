@@ -31,6 +31,7 @@ async def main():
     from llm import create_client, stream_chat
 
     client = create_client(openai_key)
+    messages = []
     print("elyos-chat (type 'quit' to exit)")
 
     while True:
@@ -47,9 +48,15 @@ async def main():
             print("Goodbye!")
             break
 
-        async for chunk in stream_chat(client, user_input):
+        messages.append({"role": "user", "content": user_input})
+
+        assistant_content = ""
+        async for chunk in stream_chat(client, messages):
             print(chunk, end="", flush=True)
+            assistant_content += chunk
         print()
+
+        messages.append({"role": "assistant", "content": assistant_content})
 
 
 if __name__ == "__main__":
