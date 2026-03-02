@@ -9,14 +9,14 @@ def load_config():
     """Load and validate environment variables."""
     load_dotenv()
     missing = []
-    for key in ("OPENAI_API_KEY", "ELYOS_API_KEY"):
+    for key in ("ANTHROPIC_API_KEY", "ELYOS_API_KEY"):
         if not os.getenv(key):
             missing.append(key)
     if missing:
         print(f"Error: missing environment variables: {', '.join(missing)}")
         print("Copy .env.example to .env and fill in your keys.")
         sys.exit(1)
-    return os.getenv("OPENAI_API_KEY"), os.getenv("ELYOS_API_KEY")
+    return os.getenv("ANTHROPIC_API_KEY"), os.getenv("ELYOS_API_KEY")
 
 
 async def get_user_input() -> str:
@@ -26,12 +26,12 @@ async def get_user_input() -> str:
 
 
 async def main():
-    openai_key, elyos_key = load_config()
+    anthropic_key, elyos_key = load_config()
 
     from api_client import create_api_client
     from llm import create_client, stream_chat
 
-    llm_client = create_client(openai_key)
+    llm_client = create_client(anthropic_key)
     api_client = create_api_client(elyos_key)
     messages = []
     print("elyos-chat (type 'quit' to exit)")

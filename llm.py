@@ -1,13 +1,13 @@
 import json
 
 import httpx
-from openai import APIError, AsyncOpenAI
+from anthropic import AsyncAnthropic, APIError
 
 from tools import TOOLS, get_weather, research_topic
 
 
-def create_client(api_key: str) -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=api_key)
+def create_client(api_key: str) -> AsyncAnthropic:
+    return AsyncAnthropic(api_key=api_key)
 
 
 async def _execute_tool(api_client: httpx.AsyncClient, name: str, args: dict) -> str:
@@ -22,7 +22,7 @@ async def _execute_tool(api_client: httpx.AsyncClient, name: str, args: dict) ->
 
 
 async def stream_chat(
-    llm_client: AsyncOpenAI,
+    llm_client: AsyncAnthropic,
     api_client: httpx.AsyncClient,
     messages: list[dict],
 ):
@@ -32,88 +32,84 @@ async def stream_chat(
     """
     while True:
         try:
-            response = await llm_client.chat.completions.create(
-                model="gpt-4o",
+            stream = llm_client.messages.stream(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1024,
                 messages=messages,
                 tools=TOOLS,
-                stream=True,
             )
         except APIError as e:
             yield f"\n[LLM error: {e.message}]\n"
             return
 
-        content = ""
-        tool_calls = {}  # index -> {id, name, arguments_str}
+        content_text = ""
+        tool_uses = []  # list of {id, name, input}
 
-        async for chunk in response:
-            delta = chunk.choices[0].delta
-
-            # Stream content chunks to the caller
-            if delta.content:
-                content += delta.content
-                yield delta.content
-
-            # Accumulate tool call chunks
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    idx = tc.index
-                    if idx not in tool_calls:
-                        tool_calls[idx] = {
-                            "id": tc.id or "",
-                            "name": tc.function.name or "",
-                            "arguments": "",
-                        }
-                    if tc.id:
-                        tool_calls[idx]["id"] = tc.id
-                    if tc.function.name:
-                        tool_calls[idx]["name"] = tc.function.name
-                    if tc.function.arguments:
-                        tool_calls[idx]["arguments"] += tc.function.arguments
+        async with stream as response:
+            async for event in response:
+                if event.type == "content_block_start":
+                    if event.content_block.type == "tool_use":
+                        tool_uses.append({
+                            "id": event.content_block.id,
+                            "name": event.content_block.name,
+                            "input_json": "",
+                        })
+                elif event.type == "content_block_delta":
+                    if event.delta.type == "text_delta":
+                        content_text += event.delta.text
+                        yield event.delta.text
+                    elif event.delta.type == "input_json_delta":
+                        if tool_uses:
+                            tool_uses[-1]["input_json"] += event.delta.partial_json
 
         # If no tool calls, we're done
-        if not tool_calls:
-            messages.append({"role": "assistant", "content": content})
+        if not tool_uses:
+            messages.append({"role": "assistant", "content": content_text})
             return
 
-        # Build assistant message with tool calls
-        assistant_msg = {
-            "role": "assistant",
-            "content": content or None,
-            "tool_calls": [
-                {
-                    "id": tc["id"],
-                    "type": "function",
-                    "function": {
-                        "name": tc["name"],
-                        "arguments": tc["arguments"],
-                    },
-                }
-                for tc in tool_calls.values()
-            ],
-        }
-        messages.append(assistant_msg)
-
-        # Execute each tool call and append results
-        for tc in tool_calls.values():
+        # Build assistant message with tool use blocks
+        assistant_content = []
+        if content_text:
+            assistant_content.append({"type": "text", "text": content_text})
+        for tu in tool_uses:
             try:
-                args = json.loads(tc["arguments"])
+                input_data = json.loads(tu["input_json"]) if tu["input_json"] else {}
             except json.JSONDecodeError:
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
+                input_data = {}
+            assistant_content.append({
+                "type": "tool_use",
+                "id": tu["id"],
+                "name": tu["name"],
+                "input": input_data,
+            })
+        messages.append({"role": "assistant", "content": assistant_content})
+
+        # Execute each tool call and collect results
+        tool_results = []
+        for tu in tool_uses:
+            try:
+                args = json.loads(tu["input_json"]) if tu["input_json"] else {}
+            except json.JSONDecodeError:
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tu["id"],
                     "content": json.dumps({"error": "Invalid tool arguments"}),
                 })
                 continue
+
             # Show pending indicator
-            if tc["name"] == "get_weather":
+            if tu["name"] == "get_weather":
                 yield f"\n[Fetching weather for {args.get('location', '...')}...]\n"
-            elif tc["name"] == "research_topic":
+            elif tu["name"] == "research_topic":
                 yield f"\n[Researching {args.get('topic', '...')}... (Ctrl+C to cancel)]\n"
-            result = await _execute_tool(api_client, tc["name"], args)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc["id"],
+
+            result = await _execute_tool(api_client, tu["name"], args)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": tu["id"],
                 "content": result,
             })
+
+        messages.append({"role": "user", "content": tool_results})
 
         # Loop back to get the LLM's response incorporating tool results
