@@ -62,6 +62,10 @@ async def main():
             del messages[msg_count_before:]
             print("\nCancelled.")
             continue
+        except Exception as e:
+            del messages[msg_count_before:]
+            print(f"\nError: {e}")
+            continue
 
 
 if __name__ == "__main__":

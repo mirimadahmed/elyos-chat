@@ -1,7 +1,7 @@
 import json
 
 import httpx
-from openai import AsyncOpenAI
+from openai import APIError, AsyncOpenAI
 
 from tools import TOOLS, get_weather, research_topic
 
@@ -31,12 +31,16 @@ async def stream_chat(
     Modifies messages in place by appending assistant and tool messages.
     """
     while True:
-        response = await llm_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            tools=TOOLS,
-            stream=True,
-        )
+        try:
+            response = await llm_client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=TOOLS,
+                stream=True,
+            )
+        except APIError as e:
+            yield f"\n[LLM error: {e.message}]\n"
+            return
 
         content = ""
         tool_calls = {}  # index -> {id, name, arguments_str}
@@ -91,7 +95,15 @@ async def stream_chat(
 
         # Execute each tool call and append results
         for tc in tool_calls.values():
-            args = json.loads(tc["arguments"])
+            try:
+                args = json.loads(tc["arguments"])
+            except json.JSONDecodeError:
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": json.dumps({"error": "Invalid tool arguments"}),
+                })
+                continue
             # Show pending indicator
             if tc["name"] == "get_weather":
                 yield f"\n[Fetching weather for {args.get('location', '...')}...]\n"
