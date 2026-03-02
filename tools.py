@@ -1,3 +1,20 @@
+import httpx
+
+
+async def get_weather(client: httpx.AsyncClient, location: str) -> dict:
+    """Fetch weather for a location from the Elyos API."""
+    try:
+        resp = await client.get("/weather", params={"location": location})
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        return {"error": f"HTTP {e.response.status_code}: {e.response.text}"}
+    except httpx.RequestError as e:
+        return {"error": f"Request failed: {e}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 TOOLS = [
     {
         "type": "function",
