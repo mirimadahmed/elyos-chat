@@ -1,5 +1,6 @@
 import asyncio
 import os
+import signal
 import sys
 
 from dotenv import load_dotenv
@@ -25,6 +26,12 @@ async def get_user_input() -> str:
     return await loop.run_in_executor(None, lambda: input("You: "))
 
 
+async def _consume_stream(stream_gen):
+    """Consume a stream generator, printing chunks and collecting content."""
+    async for chunk in stream_gen:
+        print(chunk, end="", flush=True)
+
+
 async def main():
     anthropic_key, elyos_key = load_config()
 
@@ -35,6 +42,8 @@ async def main():
     api_client = create_api_client(elyos_key)
     messages = []
     print("elyos-chat (type 'quit' to exit)")
+
+    loop = asyncio.get_event_loop()
 
     while True:
         try:
@@ -53,19 +62,33 @@ async def main():
         messages.append({"role": "user", "content": user_input})
         msg_count_before = len(messages)
 
+        # Run streaming in a task so we can cancel it on Ctrl+C
+        task = asyncio.create_task(
+            _consume_stream(stream_chat(llm_client, api_client, messages))
+        )
+
+        # Set up SIGINT to cancel the task instead of raising KeyboardInterrupt
+        cancelled = False
+
+        def _on_sigint(sig, frame):
+            nonlocal cancelled
+            cancelled = True
+            task.cancel()
+
+        old_handler = signal.signal(signal.SIGINT, _on_sigint)
+
         try:
-            async for chunk in stream_chat(llm_client, api_client, messages):
-                print(chunk, end="", flush=True)
+            await task
             print()
-        except KeyboardInterrupt:
+        except asyncio.CancelledError:
             # Roll back any partial assistant/tool messages added during this turn
             del messages[msg_count_before:]
             print("\nCancelled.")
-            continue
         except Exception as e:
             del messages[msg_count_before:]
             print(f"\nError: {e}")
-            continue
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
 
 
 if __name__ == "__main__":
