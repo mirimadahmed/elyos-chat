@@ -51,10 +51,19 @@ async def main():
             break
 
         messages.append({"role": "user", "content": user_input})
+        msg_count_before = len(messages)
 
-        async for chunk in stream_chat(llm_client, api_client, messages):
-            print(chunk, end="", flush=True)
-        print()
+        try:
+            async for chunk in stream_chat(llm_client, api_client, messages):
+                print(chunk, end="", flush=True)
+            print()
+        except KeyboardInterrupt:
+            # Roll back any partial assistant/tool messages from this turn
+            del messages[msg_count_before:]
+            # Also remove the user message since the turn was cancelled
+            messages.pop()
+            print("\nCancelled.")
+            continue
 
 
 if __name__ == "__main__":
