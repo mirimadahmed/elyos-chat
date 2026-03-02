@@ -28,9 +28,11 @@ async def get_user_input() -> str:
 async def main():
     openai_key, elyos_key = load_config()
 
+    from api_client import create_api_client
     from llm import create_client, stream_chat
 
-    client = create_client(openai_key)
+    llm_client = create_client(openai_key)
+    api_client = create_api_client(elyos_key)
     messages = []
     print("elyos-chat (type 'quit' to exit)")
 
@@ -50,13 +52,9 @@ async def main():
 
         messages.append({"role": "user", "content": user_input})
 
-        assistant_content = ""
-        async for chunk in stream_chat(client, messages):
+        async for chunk in stream_chat(llm_client, api_client, messages):
             print(chunk, end="", flush=True)
-            assistant_content += chunk
         print()
-
-        messages.append({"role": "assistant", "content": assistant_content})
 
 
 if __name__ == "__main__":
