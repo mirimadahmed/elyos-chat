@@ -15,5 +15,5 @@ dev = [
     "pytest-asyncio>=0.23",
 ]
 
-[project.scripts]
-elyos-chat = "main:main_entry"
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
