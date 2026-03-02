@@ -1,5 +1,7 @@
 from openai import AsyncOpenAI
 
+from tools import TOOLS
+
 
 def create_client(api_key: str) -> AsyncOpenAI:
     return AsyncOpenAI(api_key=api_key)
@@ -10,6 +12,7 @@ async def stream_chat(client: AsyncOpenAI, messages: list[dict]):
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=messages,
+        tools=TOOLS,
         stream=True,
     )
     async for chunk in response:
