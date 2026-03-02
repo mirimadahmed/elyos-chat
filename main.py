@@ -1,5 +1,22 @@
 import asyncio
+import os
 import sys
+
+from dotenv import load_dotenv
+
+
+def load_config():
+    """Load and validate environment variables."""
+    load_dotenv()
+    missing = []
+    for key in ("OPENAI_API_KEY", "ELYOS_API_KEY"):
+        if not os.getenv(key):
+            missing.append(key)
+    if missing:
+        print(f"Error: missing environment variables: {', '.join(missing)}")
+        print("Copy .env.example to .env and fill in your keys.")
+        sys.exit(1)
+    return os.getenv("OPENAI_API_KEY"), os.getenv("ELYOS_API_KEY")
 
 
 async def get_user_input() -> str:
@@ -9,6 +26,7 @@ async def get_user_input() -> str:
 
 
 async def main():
+    openai_key, elyos_key = load_config()
     print("elyos-chat (type 'quit' to exit)")
 
     while True:
