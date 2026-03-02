@@ -27,6 +27,10 @@ async def get_user_input() -> str:
 
 async def main():
     openai_key, elyos_key = load_config()
+
+    from llm import create_client, stream_chat
+
+    client = create_client(openai_key)
     print("elyos-chat (type 'quit' to exit)")
 
     while True:
@@ -43,8 +47,9 @@ async def main():
             print("Goodbye!")
             break
 
-        # TODO: send to LLM
-        print(f"[echo] {user_input}")
+        async for chunk in stream_chat(client, user_input):
+            print(chunk, end="", flush=True)
+        print()
 
 
 if __name__ == "__main__":
