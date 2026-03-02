@@ -15,6 +15,20 @@ async def get_weather(client: httpx.AsyncClient, location: str) -> dict:
         return {"error": str(e)}
 
 
+async def research_topic(client: httpx.AsyncClient, topic: str) -> dict:
+    """Research a topic via the Elyos API (slow: 3-8 seconds)."""
+    try:
+        resp = await client.get("/research", params={"topic": topic})
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        return {"error": f"HTTP {e.response.status_code}: {e.response.text}"}
+    except httpx.RequestError as e:
+        return {"error": f"Request failed: {e}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 TOOLS = [
     {
         "type": "function",
