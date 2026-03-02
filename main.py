@@ -59,8 +59,8 @@ async def main():
             print("Goodbye!")
             break
 
-        messages.append({"role": "user", "content": user_input})
         msg_count_before = len(messages)
+        messages.append({"role": "user", "content": user_input})
 
         # Run streaming in a task so we can cancel it on Ctrl+C
         task = asyncio.create_task(
