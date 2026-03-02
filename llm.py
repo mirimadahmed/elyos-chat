@@ -92,6 +92,11 @@ async def stream_chat(
         # Execute each tool call and append results
         for tc in tool_calls.values():
             args = json.loads(tc["arguments"])
+            # Show pending indicator
+            if tc["name"] == "get_weather":
+                yield f"\n[Fetching weather for {args.get('location', '...')}...]\n"
+            elif tc["name"] == "research_topic":
+                yield f"\n[Researching {args.get('topic', '...')}... (Ctrl+C to cancel)]\n"
             result = await _execute_tool(api_client, tc["name"], args)
             messages.append({
                 "role": "tool",
